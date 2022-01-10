@@ -5,11 +5,7 @@ import databases
 import sqlalchemy
 from datetime import datetime
 import uvicdirorn
-"""
 
-fhshgfhsgufhjdshfgsudaygfsgfusgfsgyufgdsui
-
-"""
 DATABASE_URL = "sqlite:///./student.db"
 
 metadata = sqlalchemy.MetaData()
