@@ -3,6 +3,8 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
 import databases
 import sqlalchemy
+import time
+from datetime import datetime
 
 DATABASE_URL = "sqlite:///./token.db"
 
@@ -14,25 +16,30 @@ token = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("tokenid", sqlalchemy.INTEGER, primary_key=True),
     sqlalchemy.Column("count", sqlalchemy.INTEGER),
-    sqlalchemy.Column("status", sqlalchemy.BOOLEAN, default=True)
+    sqlalchemy.Column("status", sqlalchemy.BOOLEAN, default=True),
+    sqlalchemy.Column("time", sqlalchemy.FLOAT, nullable=False)
 )
 
-engine = sqlalchemy.create_engine(DATABASE_URL)
-metadata.create_all(engine)
 
-# Initilize available token (when server start)
 async def initialize():
     for i in range(1, 100):
         query = token.insert().values(
             tokenid=i,
             count=0,
-            status=False
+            status=False,
+            time = timestamp(datetime.now())
         )
         await database.execute(query)
 
-# when server shutdown
+
 async def delete_all_record():
     await database.execute("DELETE FROM TOKEN")
+
+
+def timestamp(dt):
+    return time.mktime(dt.timetuple()) + dt.microsecond / 1e6
+
+
 
 
 class UserIN(BaseModel):
@@ -51,7 +58,11 @@ class UserOUT(BaseModel):
     tokenid: int
     count: int
     status: bool
+    time:float
 
+
+engine = sqlalchemy.create_engine(DATABASE_URL)
+metadata.create_all(engine)
 
 app = FastAPI(title='Token System')
 
@@ -107,7 +118,7 @@ async def get_by_id(id: int):
 async def create_user(r: UserIN):
     query = "select min(tokenid) from token where status = 0 LIMIT 1"
     id = await database.fetch_one(query)
-    if id[0] is None: # checing for available space
+    if id[0] is None:
         raise HTTPException(status_code=404, detail="No Space is available")
 
     # if id[0] is None:
@@ -131,14 +142,14 @@ async def create_user(r: UserIN):
     #     query = token.update().values(count=r.count, status=True).where(token.c.tokenid == int(id))
 
     id = int(id[0])
-    query = token.update().values(count=r.count, status=True).where(token.c.tokenid == int(id))
+    query = token.update().values(count=r.count, status=True, time = timestamp(datetime.now())).where(token.c.tokenid == int(id))
     await database.execute(query)
     return await get_by_id(id)
 
 
 @app.delete('/deleteById/{id}')
 async def delete_by_id(id: int):
-    query = token.update().values(count=0, status=False).where(token.c.tokenid == id)
+    query = token.update().values(count=0, status=False, time = 0).where(token.c.tokenid == id)
     temp = await database.execute(query)
     if temp > 0:
         return {"Message": "Successfully deleted"}
@@ -148,6 +159,6 @@ async def delete_by_id(id: int):
 
 @app.put('/updateBaggageCount/{id}', response_model=UserOUT)
 async def update_baggage_count(id: int, r: BaggageCount = Depends()):
-    query = token.update().values(count=r.count).where(token.c.tokenid == id)
+    query = token.update().values(count=r.count,time = timestamp(datetime.now())).where(token.c.tokenid == id)
     await database.execute(query)
     return await get_by_id(id)
