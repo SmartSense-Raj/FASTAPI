@@ -17,17 +17,20 @@ token = sqlalchemy.Table(
     sqlalchemy.Column("status", sqlalchemy.BOOLEAN, default=True)
 )
 
+engine = sqlalchemy.create_engine(DATABASE_URL)
+metadata.create_all(engine)
 
+# Initilize available token (when server start)
 async def initialize():
     for i in range(1, 100):
         query = token.insert().values(
             tokenid=i,
             count=0,
-            status=True
+            status=False
         )
         await database.execute(query)
 
-
+# when server shutdown
 async def delete_all_record():
     await database.execute("DELETE FROM TOKEN")
 
@@ -49,9 +52,6 @@ class UserOUT(BaseModel):
     count: int
     status: bool
 
-
-engine = sqlalchemy.create_engine(DATABASE_URL)
-metadata.create_all(engine)
 
 app = FastAPI(title='Token System')
 
@@ -107,7 +107,7 @@ async def get_by_id(id: int):
 async def create_user(r: UserIN):
     query = "select min(tokenid) from token where status = 0 LIMIT 1"
     id = await database.fetch_one(query)
-    if id[0] is None:
+    if id[0] is None: # checing for available space
         raise HTTPException(status_code=404, detail="No Space is available")
 
     # if id[0] is None:
